@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Финансов Калкулатор с Moneyflow</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f9f9f9;
+    }
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+    }
+    input, select {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+    }
+    button {
+      margin-top: 15px;
+      padding: 10px 20px;
+    }
+    .results {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Калкулатор за ДДС, Данъци и Дивидент</h2>
+
+    <label for="month">Избери месец:</label>
+    <select id="month"></select>
+
+    <label>Приходи (без ДДС): <input type="number" id="income"></label>
+    <label>Разходи (без ДДС): <input type="number" id="expenses"></label>
+    <label>ВОП (без ДДС): <input type="number" id="vop"></label>
+
+    <button onclick="calculate()">Изчисли</button>
+    <button onclick="downloadPDF()">Изтегли PDF</button>
+    <button onclick="downloadExcel()">Изтегли Excel</button>
+
+    <div class="results" id="results"></div>
+
+    <canvas id="flowChart" style="margin-top:30px;"></canvas>
+  </div>
+
+  <script>
+    const months = ["Януари", "Февруари", "Март", "Април", "Май", "Юни", "Юли", "Август", "Септември", "Октомври", "Ноември", "Декември"];
+    const monthSelect = document.getElementById("month");
+
+    months.forEach((m, i) => {
+      const opt = document.createElement("option");
+      opt.value = i;
+      opt.textContent = m;
+      monthSelect.appendChild(opt);
+    });
+    monthSelect.value = new Date().getMonth();
+
+    function calculate() {
+      const income = parseFloat(document.getElementById('income').value) || 0;
+      const expenses = parseFloat(document.getElementById('expenses').value) || 0;
+      const vop = parseFloat(document.getElementById('vop').value) || 0;
+      const dds = vop * 0.20;
+      const profitBeforeTax = income - expenses - dds;
+      const profitTax = profitBeforeTax * 0.10;
+      const netProfit = profitBeforeTax - profitTax;
+      const dividendTax = netProfit * 0.05;
+      const dividend = netProfit - dividendTax;
+
+      const results = `
+        <p><strong>ДДС по ВОП:</strong> ${dds.toFixed(2)} лв</p>
+        <p><strong>Печалба преди данъци:</strong> ${profitBeforeTax.toFixed(2)} лв</p>
+        <p><strong>Данък печалба (10%):</strong> ${profitTax.toFixed(2)} лв</p>
+        <p><strong>Данък дивидент (5%):</strong> ${dividendTax.toFixed(2)} лв</p>
+        <p><strong>Нетен дивидент:</strong> ${dividend.toFixed(2)} лв</p>
+      `;
+
+      document.getElementById("results").innerHTML = results;
+
+      const monthKey = months[monthSelect.value];
+      localStorage.setItem(monthKey, JSON.stringify({ income, expenses, vop }));
+
+      drawChart(income, expenses);
+    }
+
+    function drawChart(income, expenses) {
+      const ctx = document.getElementById('flowChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Приходи', 'Разходи'],
+          datasets: [{
+            label: 'Moneyflow',
+            data: [income, expenses],
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false }
+          }
+        }
+      });
+    }
+
+    function downloadPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      doc.text(document.getElementById("results").innerText, 10, 10);
+      doc.save("financial-summary.pdf");
+    }
+
+    function downloadExcel() {
+      const ws = XLSX.utils.json_to_sheet([
+        {
+          Приходи: document.getElementById('income').value,
+          Разходи: document.getElementById('expenses').value,
+          ВОП: document.getElementById('vop').value,
+        }
+      ]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Отчет");
+      XLSX.writeFile(wb, "summary.xlsx");
+    }
+  </script>
+</body>
+</html>
