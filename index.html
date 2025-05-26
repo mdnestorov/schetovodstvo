@@ -47,8 +47,9 @@
     <select id="month"></select>
 
     <label>Приходи (без ДДС): <input type="number" id="income"></label>
-    <label>Разходи (без ДДС): <input type="number" id="expenses"></label>
-    <label>ВОП (без ДДС): <input type="number" id="vop"></label>
+    <label>Разходи с ДДС (България) – в лева: <input type="number" id="expensesBG"></label>
+    <label>Разходи без ДДС (в евро): <input type="number" id="euro"></label>
+    <label>Разходи без ДДС (в USD): <input type="number" id="usd"></label>
 
     <button onclick="calculate()">Изчисли</button>
     <button onclick="downloadPDF()">Изтегли PDF</button>
@@ -60,9 +61,11 @@
   </div>
 
   <script>
+    const EUR_RATE = 1.95583;
+    const USD_RATE = 1.80;
+
     const months = ["Януари", "Февруари", "Март", "Април", "Май", "Юни", "Юли", "Август", "Септември", "Октомври", "Ноември", "Декември"];
     const monthSelect = document.getElementById("month");
-
     months.forEach((m, i) => {
       const opt = document.createElement("option");
       opt.value = i;
@@ -73,32 +76,37 @@
 
     function calculate() {
       const income = parseFloat(document.getElementById('income').value) || 0;
-      const expenses = parseFloat(document.getElementById('expenses').value) || 0;
-      const vop = parseFloat(document.getElementById('vop').value) || 0;
-      const dds = vop * 0.20;
-      const profitBeforeTax = income - expenses - dds;
+      const expensesBG = parseFloat(document.getElementById('expensesBG').value) || 0;
+      const euro = parseFloat(document.getElementById('euro').value) || 0;
+      const usd = parseFloat(document.getElementById('usd').value) || 0;
+
+      const euroInBGN = euro * EUR_RATE;
+      const usdInBGN = usd * USD_RATE;
+      const externalExpenses = euroInBGN + usdInBGN;
+
+      const ddsVOP = externalExpenses * 0.20;
+      const profitBeforeTax = income - expensesBG - externalExpenses - ddsVOP;
       const profitTax = profitBeforeTax * 0.10;
       const netProfit = profitBeforeTax - profitTax;
       const dividendTax = netProfit * 0.05;
       const dividend = netProfit - dividendTax;
 
       const results = `
-        <p><strong>ДДС по ВОП:</strong> ${dds.toFixed(2)} лв</p>
-        <p><strong>Печалба преди данъци:</strong> ${profitBeforeTax.toFixed(2)} лв</p>
+        <p><strong>Разходи в евро (BGN):</strong> ${euroInBGN.toFixed(2)} лв</p>
+        <p><strong>Разходи в USD (BGN):</strong> ${usdInBGN.toFixed(2)} лв</p>
+        <p><strong>Общо външни разходи (BGN):</strong> ${externalExpenses.toFixed(2)} лв</p>
+        <p><strong>ДДС по ВОП (20%):</strong> ${ddsVOP.toFixed(2)} лв</p>
+        <p><strong>Облагаема печалба:</strong> ${profitBeforeTax.toFixed(2)} лв</p>
         <p><strong>Данък печалба (10%):</strong> ${profitTax.toFixed(2)} лв</p>
         <p><strong>Данък дивидент (5%):</strong> ${dividendTax.toFixed(2)} лв</p>
         <p><strong>Нетен дивидент:</strong> ${dividend.toFixed(2)} лв</p>
       `;
 
       document.getElementById("results").innerHTML = results;
-
-      const monthKey = months[monthSelect.value];
-      localStorage.setItem(monthKey, JSON.stringify({ income, expenses, vop }));
-
-      drawChart(income, expenses);
+      drawChart(income, expensesBG + externalExpenses);
     }
 
-    function drawChart(income, expenses) {
+    function drawChart(income, totalExpenses) {
       const ctx = document.getElementById('flowChart').getContext('2d');
       new Chart(ctx, {
         type: 'bar',
@@ -106,7 +114,8 @@
           labels: ['Приходи', 'Разходи'],
           datasets: [{
             label: 'Moneyflow',
-            data: [income, expenses],
+            data: [income, totalExpenses],
+            backgroundColor: ['#4caf50', '#f44336']
           }]
         },
         options: {
@@ -128,9 +137,10 @@
     function downloadExcel() {
       const ws = XLSX.utils.json_to_sheet([
         {
-          Приходи: document.getElementById('income').value,
-          Разходи: document.getElementById('expenses').value,
-          ВОП: document.getElementById('vop').value,
+          "Приходи": document.getElementById('income').value,
+          "Разходи с ДДС (BGN)": document.getElementById('expensesBG').value,
+          "Разходи EUR": document.getElementById('euro').value,
+          "Разходи USD": document.getElementById('usd').value
         }
       ]);
       const wb = XLSX.utils.book_new();
