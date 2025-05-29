@@ -25,7 +25,7 @@
       display: block;
       margin-top: 12px;
     }
-    input {
+    input, select {
       width: 100%;
       padding: 8px;
       margin-top: 5px;
@@ -43,6 +43,19 @@
   <div class="container">
     <h2>Калкулатор: Приходи, Разходи, ДДС и Данъци</h2>
 
+    <label>Месец:
+      <select id="month">
+        <option>Януари</option><option>Февруари</option><option>Март</option>
+        <option>Април</option><option>Май</option><option>Юни</option>
+        <option>Юли</option><option>Август</option><option>Септември</option>
+        <option>Октомври</option><option>Ноември</option><option>Декември</option>
+      </select>
+    </label>
+
+    <label>Година:
+      <select id="year"></select>
+    </label>
+
     <label>Приходи (без ДДС): <input type="number" id="income" /></label>
     <label>Разходи без ДДС (BGN): <input type="number" id="bgNoVAT" /></label>
     <label>Разходи с включен ДДС (BGN): <input type="number" id="bgWithVAT" /></label>
@@ -58,6 +71,18 @@
   </div>
 
   <script>
+    const yearSelect = document.getElementById('year');
+    const currentYear = new Date().getFullYear();
+    for (let y = currentYear - 5; y <= currentYear + 5; y++) {
+      const opt = document.createElement("option");
+      opt.value = y;
+      opt.textContent = y;
+      yearSelect.appendChild(opt);
+    }
+    yearSelect.value = currentYear;
+
+    let latestResultText = ""; // To reuse in PDF export
+
     async function calculate() {
       const income = parseFloat(document.getElementById('income').value) || 0;
       const bgNoVAT = parseFloat(document.getElementById('bgNoVAT').value) || 0;
@@ -65,20 +90,19 @@
       const euro = parseFloat(document.getElementById('euro').value) || 0;
       const usd = parseFloat(document.getElementById('usd').value) || 0;
 
-      // Взимане на курс от exchangerate.host API
+      const month = document.getElementById('month').value;
+      const year = document.getElementById('year').value;
+
       const rateRes = await fetch('https://api.exchangerate.host/latest?base=EUR&symbols=BGN,USD');
       const data = await rateRes.json();
-
       const EUR_TO_BGN = data.rates.BGN || 1.95583;
       const USD_TO_BGN = (data.rates.BGN / data.rates.USD) || 1.80;
 
-      // Преобразувания и добавяне на ДДС
       const bgNoVATWithVAT = bgNoVAT * 1.20;
       const euroBGN = euro * EUR_TO_BGN;
       const usdBGN = usd * USD_TO_BGN;
       const euroWithVAT = euroBGN * 1.20;
       const usdWithVAT = usdBGN * 1.20;
-
       const vatDue = (euroBGN + usdBGN) * 0.20;
 
       const totalExpenses = bgNoVATWithVAT + bgWithVAT + euroWithVAT + usdWithVAT;
@@ -88,22 +112,20 @@
       const dividendTax = netProfit * 0.05;
       const finalDividend = netProfit - dividendTax;
 
-      const results = `
-        <p><strong>Курс евро:</strong> ${EUR_TO_BGN.toFixed(4)}</p>
-        <p><strong>Курс долар:</strong> ${USD_TO_BGN.toFixed(4)}</p>
-        <p><strong>Разходи в лева (без ДДС) + ДДС:</strong> ${bgNoVATWithVAT.toFixed(2)} лв</p>
-        <p><strong>Разходи с включен ДДС (BG):</strong> ${bgWithVAT.toFixed(2)} лв</p>
-        <p><strong>Разходи в евро (BGN) + ДДС:</strong> ${euroWithVAT.toFixed(2)} лв</p>
-        <p><strong>Разходи в USD (BGN) + ДДС:</strong> ${usdWithVAT.toFixed(2)} лв</p>
-        <p><strong>ДДС за внасяне (евро + USD):</strong> ${vatDue.toFixed(2)} лв</p>
-        <p><strong>Общо всички разходи с ДДС:</strong> ${totalExpenses.toFixed(2)} лв</p>
-        <p><strong>Облагаема печалба:</strong> ${profitBeforeTax.toFixed(2)} лв</p>
-        <p><strong>Корпоративен данък (10%):</strong> ${profitTax.toFixed(2)} лв</p>
-        <p><strong>Данък върху дивидент (5%):</strong> ${dividendTax.toFixed(2)} лв</p>
-        <p><strong>Нетен дивидент:</strong> ${finalDividend.toFixed(2)} лв</p>
-      `;
+      latestResultText = `Финансов отчет за: ${month} ${year}\n\n`;
+      latestResultText += `Курс евро: ${EUR_TO_BGN.toFixed(4)}\nКурс долар: ${USD_TO_BGN.toFixed(4)}\n\n`;
+      latestResultText += `Разходи без ДДС (BGN) + ДДС: ${bgNoVATWithVAT.toFixed(2)} лв\n`;
+      latestResultText += `Разходи с включен ДДС (BGN): ${bgWithVAT.toFixed(2)} лв\n`;
+      latestResultText += `Разходи евро (BGN) + ДДС: ${euroWithVAT.toFixed(2)} лв\n`;
+      latestResultText += `Разходи USD (BGN) + ДДС: ${usdWithVAT.toFixed(2)} лв\n`;
+      latestResultText += `ДДС за внасяне (евро + USD): ${vatDue.toFixed(2)} лв\n\n`;
+      latestResultText += `Всички разходи с ДДС: ${totalExpenses.toFixed(2)} лв\n`;
+      latestResultText += `Облагаема печалба: ${profitBeforeTax.toFixed(2)} лв\n`;
+      latestResultText += `Корпоративен данък (10%): ${profitTax.toFixed(2)} лв\n`;
+      latestResultText += `Данък дивидент (5%): ${dividendTax.toFixed(2)} лв\n`;
+      latestResultText += `Нетен дивидент: ${finalDividend.toFixed(2)} лв\n`;
 
-      document.getElementById("results").innerHTML = results;
+      document.getElementById("results").innerText = latestResultText;
       drawChart(income, totalExpenses);
     }
 
@@ -131,13 +153,19 @@
     function downloadPDF() {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
-      doc.text(document.getElementById("results").innerText, 10, 10);
+      doc.setFontSize(12);
+      doc.text(latestResultText, 10, 10);
       doc.save("финансов_отчет.pdf");
     }
 
     function downloadExcel() {
+      const month = document.getElementById('month').value;
+      const year = document.getElementById('year').value;
+
       const ws = XLSX.utils.json_to_sheet([
         {
+          "Месец": month,
+          "Година": year,
           "Приходи": document.getElementById('income').value,
           "Разходи без ДДС (BGN)": document.getElementById('bgNoVAT').value,
           "Разходи с включен ДДС (BGN)": document.getElementById('bgWithVAT').value,
@@ -147,9 +175,8 @@
       ]);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Отчет");
-      XLSX.writeFile(wb, "финансов_отчет.xlsx");
+      XLSX.writeFile(wb, `финансов_отчет_${month}_${year}.xlsx`);
     }
   </script>
 </body>
 </html>
-
