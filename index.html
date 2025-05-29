@@ -14,7 +14,7 @@
       background: #f5f5f5;
     }
     .container {
-      max-width: 850px;
+      max-width: 880px;
       margin: auto;
       background: #fff;
       padding: 20px;
@@ -44,10 +44,10 @@
     <h2>Калкулатор: Приходи, Разходи, ДДС и Данъци</h2>
 
     <label>Приходи (без ДДС): <input type="number" id="income" /></label>
-    <label>Разходи без ДДС (в лева): <input type="number" id="bgNoVAT" /></label>
-    <label>Разходи с включен ДДС (в лева): <input type="number" id="bgWithVAT" /></label>
-    <label>Разходи без ДДС (в евро): <input type="number" id="euro" /></label>
-    <label>Разходи без ДДС (в USD): <input type="number" id="usd" /></label>
+    <label>Разходи без ДДС (BGN): <input type="number" id="bgNoVAT" /></label>
+    <label>Разходи с включен ДДС (BGN): <input type="number" id="bgWithVAT" /></label>
+    <label>Разходи в евро (без ДДС): <input type="number" id="euro" /></label>
+    <label>Разходи в USD (без ДДС): <input type="number" id="usd" /></label>
 
     <button onclick="calculate()">Изчисли</button>
     <button onclick="downloadPDF()">Изтегли PDF</button>
@@ -58,28 +58,30 @@
   </div>
 
   <script>
-    const EUR_RATE = 1.95583;
-    const USD_RATE = 1.80;
-
-    function calculate() {
+    async function calculate() {
       const income = parseFloat(document.getElementById('income').value) || 0;
       const bgNoVAT = parseFloat(document.getElementById('bgNoVAT').value) || 0;
       const bgWithVAT = parseFloat(document.getElementById('bgWithVAT').value) || 0;
       const euro = parseFloat(document.getElementById('euro').value) || 0;
       const usd = parseFloat(document.getElementById('usd').value) || 0;
 
-      // Преобразувания
+      // Взимане на курс от exchangerate.host API
+      const rateRes = await fetch('https://api.exchangerate.host/latest?base=EUR&symbols=BGN,USD');
+      const data = await rateRes.json();
+
+      const EUR_TO_BGN = data.rates.BGN || 1.95583;
+      const USD_TO_BGN = (data.rates.BGN / data.rates.USD) || 1.80;
+
+      // Преобразувания и добавяне на ДДС
       const bgNoVATWithVAT = bgNoVAT * 1.20;
-      const euroBGN = euro * EUR_RATE;
-      const usdBGN = usd * USD_RATE;
+      const euroBGN = euro * EUR_TO_BGN;
+      const usdBGN = usd * USD_TO_BGN;
       const euroWithVAT = euroBGN * 1.20;
       const usdWithVAT = usdBGN * 1.20;
+
       const vatDue = (euroBGN + usdBGN) * 0.20;
 
-      // Общо разходи с ДДС
       const totalExpenses = bgNoVATWithVAT + bgWithVAT + euroWithVAT + usdWithVAT;
-
-      // Данъци и дивидент
       const profitBeforeTax = income - totalExpenses;
       const profitTax = profitBeforeTax * 0.10;
       const netProfit = profitBeforeTax - profitTax;
@@ -87,7 +89,9 @@
       const finalDividend = netProfit - dividendTax;
 
       const results = `
-        <p><strong>Разходи без ДДС (в лева) + ДДС:</strong> ${bgNoVATWithVAT.toFixed(2)} лв</p>
+        <p><strong>Курс евро:</strong> ${EUR_TO_BGN.toFixed(4)}</p>
+        <p><strong>Курс долар:</strong> ${USD_TO_BGN.toFixed(4)}</p>
+        <p><strong>Разходи в лева (без ДДС) + ДДС:</strong> ${bgNoVATWithVAT.toFixed(2)} лв</p>
         <p><strong>Разходи с включен ДДС (BG):</strong> ${bgWithVAT.toFixed(2)} лв</p>
         <p><strong>Разходи в евро (BGN) + ДДС:</strong> ${euroWithVAT.toFixed(2)} лв</p>
         <p><strong>Разходи в USD (BGN) + ДДС:</strong> ${usdWithVAT.toFixed(2)} лв</p>
@@ -148,3 +152,4 @@
   </script>
 </body>
 </html>
+
