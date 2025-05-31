@@ -1,52 +1,176 @@
-async function calculate() {
-  const income = parseFloat(document.getElementById('income').value) || 0;
-  const bgNoVAT = parseFloat(document.getElementById('bgNoVAT').value) || 0;
-  const bgWithVAT = parseFloat(document.getElementById('bgWithVAT').value) || 0;
-  const euro = parseFloat(document.getElementById('euro').value) || 0;
-  const usd = parseFloat(document.getElementById('usd').value) || 0;
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Финансов Калкулатор</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      max-width: 880px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 12px rgba(0,0,0,0.1);
+    }
+    label {
+      display: block;
+      margin-top: 12px;
+    }
+    input, select {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+    }
+    button {
+      margin-top: 15px;
+      padding: 10px 20px;
+    }
+    .results {
+      margin-top: 25px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Калкулатор: Приходи, Разходи, ДДС и Данъци</h2>
 
-  const month = document.getElementById('month').value;
-  const year = document.getElementById('year').value;
+    <label>Месец:
+      <select id="month">
+        <option>Януари</option><option>Февруари</option><option>Март</option>
+        <option>Април</option><option>Май</option><option>Юни</option>
+        <option>Юли</option><option>Август</option><option>Септември</option>
+        <option>Октомври</option><option>Ноември</option><option>Декември</option>
+      </select>
+    </label>
 
-  if (income === 0) {
-    document.getElementById("results").innerText = "❗ Въведете поне приход.";
-    return;
-  }
+    <label>Година:
+      <select id="year"></select>
+    </label>
 
-  const rateRes = await fetch('https://api.exchangerate.host/latest?base=EUR&symbols=BGN,USD');
-  const data = await rateRes.json();
-  const EUR_TO_BGN = data.rates.BGN || 1.95583;
-  const USD_TO_BGN = (data.rates.BGN / data.rates.USD) || 1.80;
+    <label>Приходи (без ДДС): <input type="number" id="income" /></label>
+    <label>Разходи без ДДС (BGN): <input type="number" id="bgNoVAT" /></label>
+    <label>Разходи с включен ДДС (BGN): <input type="number" id="bgWithVAT" /></label>
 
-  const bgNoVATWithVAT = bgNoVAT * 1.20;
-  const euroBGN = euro * EUR_TO_BGN;
-  const usdBGN = usd * USD_TO_BGN;
-  const euroWithVAT = euroBGN * 1.20;
-  const usdWithVAT = usdBGN * 1.20;
-  const vatDue = (euroBGN + usdBGN) * 0.20;
+    <button onclick="calculate()">Изчисли</button>
+    <button onclick="downloadPDF()">Изтегли PDF</button>
+    <button onclick="downloadExcel()">Изтегли Excel</button>
 
-  const totalExpenses = bgNoVATWithVAT + bgWithVAT + euroWithVAT + usdWithVAT;
-  const profitBeforeTax = income - totalExpenses;
-  const profitTax = profitBeforeTax * 0.10;
-  const netProfit = profitBeforeTax - profitTax;
-  const dividendTax = netProfit * 0.05;
-  const finalDividend = netProfit - dividendTax;
-  const dividendMargin = income > 0 ? ((finalDividend / income) * 100).toFixed(2) : '0.00';
+    <div class="results" id="results"></div>
+    <canvas id="flowChart" style="margin-top:30px;"></canvas>
+  </div>
 
-  latestResultText = `Финансов отчет за: ${month} ${year}\n\n`;
-  latestResultText += `Курс евро: ${EUR_TO_BGN.toFixed(4)}\nКурс долар: ${USD_TO_BGN.toFixed(4)}\n\n`;
-  latestResultText += `Разходи без ДДС (BGN) + ДДС: ${bgNoVATWithVAT.toFixed(2)} лв\n`;
-  latestResultText += `Разходи с включен ДДС (BGN): ${bgWithVAT.toFixed(2)} лв\n`;
-  latestResultText += `Разходи евро (BGN) + ДДС: ${euroWithVAT.toFixed(2)} лв\n`;
-  latestResultText += `Разходи USD (BGN) + ДДС: ${usdWithVAT.toFixed(2)} лв\n`;
-  latestResultText += `ДДС за внасяне (евро + USD): ${vatDue.toFixed(2)} лв\n\n`;
-  latestResultText += `Общо разходи с ДДС: ${totalExpenses.toFixed(2)} лв\n`;
-  latestResultText += `Облагаема печалба: ${profitBeforeTax.toFixed(2)} лв\n`;
-  latestResultText += `Корпоративен данък (10%): ${profitTax.toFixed(2)} лв\n`;
-  latestResultText += `Данък дивидент (5%): ${dividendTax.toFixed(2)} лв\n`;
-  latestResultText += `Сума за разпределение (нетен дивидент): ${finalDividend.toFixed(2)} лв\n`;
-  latestResultText += `Марж нетен дивидент: ${dividendMargin}%\n`;
+  <script>
+    const yearSelect = document.getElementById('year');
+    const currentYear = new Date().getFullYear();
+    for (let y = currentYear - 5; y <= currentYear + 5; y++) {
+      const opt = document.createElement("option");
+      opt.value = y;
+      opt.textContent = y;
+      yearSelect.appendChild(opt);
+    }
+    yearSelect.value = currentYear;
 
-  document.getElementById("results").innerText = latestResultText;
-  drawChart(income, totalExpenses);
-}
+    window.onload = () => {
+      const currentMonth = new Date().getMonth();
+      document.getElementById("month").selectedIndex = currentMonth;
+    };
+
+    let latestResultText = "";
+
+    function calculate() {
+      const income = parseFloat(document.getElementById('income').value) || 0;
+      const bgNoVAT = parseFloat(document.getElementById('bgNoVAT').value) || 0;
+      const bgWithVAT = parseFloat(document.getElementById('bgWithVAT').value) || 0;
+
+      const month = document.getElementById('month').value;
+      const year = document.getElementById('year').value;
+
+      if (income === 0) {
+        document.getElementById("results").innerText = "❗ Въведете поне приход.";
+        return;
+      }
+
+      const bgNoVATWithVAT = bgNoVAT * 1.20;
+      const vatDue = bgNoVAT * 0.20;
+      const totalExpenses = bgNoVATWithVAT + bgWithVAT;
+      const profitBeforeTax = income - totalExpenses;
+      const profitTax = profitBeforeTax * 0.10;
+      const netProfit = profitBeforeTax - profitTax;
+      const dividendTax = netProfit * 0.05;
+      const finalDividend = netProfit - dividendTax;
+      const dividendMargin = income > 0 ? ((finalDividend / income) * 100).toFixed(2) : '0.00';
+
+      latestResultText = `Финансов отчет за: ${month} ${year}\n\n`;
+      latestResultText += `Разходи без ДДС (BGN) + ДДС: ${bgNoVATWithVAT.toFixed(2)} лв\n`;
+      latestResultText += `Разходи с включен ДДС (BGN): ${bgWithVAT.toFixed(2)} лв\n`;
+      latestResultText += `ДДС за внасяне (разходи без ДДС): ${vatDue.toFixed(2)} лв\n\n`;
+      latestResultText += `Общо разходи с ДДС: ${totalExpenses.toFixed(2)} лв\n`;
+      latestResultText += `Облагаема печалба: ${profitBeforeTax.toFixed(2)} лв\n`;
+      latestResultText += `Корпоративен данък (10%): ${profitTax.toFixed(2)} лв\n`;
+      latestResultText += `Данък дивидент (5%): ${dividendTax.toFixed(2)} лв\n`;
+      latestResultText += `Сума за разпределение (нетен дивидент): ${finalDividend.toFixed(2)} лв\n`;
+      latestResultText += `Марж нетен дивидент: ${dividendMargin}%\n`;
+
+      document.getElementById("results").innerText = latestResultText;
+      drawChart(income, totalExpenses);
+    }
+
+    function drawChart(income, expenses) {
+      const ctx = document.getElementById('flowChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Приходи', 'Разходи'],
+          datasets: [{
+            label: 'Финансов поток',
+            data: [income, expenses],
+            backgroundColor: ['#4caf50', '#f44336']
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false }
+          }
+        }
+      });
+    }
+
+    function downloadPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      doc.setFontSize(12);
+      doc.text(latestResultText, 10, 10);
+      doc.save("финансов_отчет.pdf");
+    }
+
+    function downloadExcel() {
+      const month = document.getElementById('month').value;
+      const year = document.getElementById('year').value;
+
+      const ws = XLSX.utils.json_to_sheet([
+        {
+          "Месец": month,
+          "Година": year,
+          "Приходи": document.getElementById('income').value,
+          "Разходи без ДДС": document.getElementById('bgNoVAT').value,
+          "Разходи с включен ДДС": document.getElementById('bgWithVAT').value
+        }
+      ]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Отчет");
+      XLSX.writeFile(wb, `финансов_отчет_${month}_${year}.xlsx`);
+    }
+  </script>
+</body>
+</html>
